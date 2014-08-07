@@ -31,14 +31,16 @@ def handle_cmd():
 	main_parser = argparse.ArgumentParser(description="FastQ main portal", formatter_class=SubcommandHelpFormatter)
 	sub_parsers = main_parser.add_subparsers(title="Commands", metavar="[command]", dest="command")
 
-	sanitizer_parser = sub_parsers.add_parser("sanitizer", help="housekeeping the data like crazy")
-	sanitizer_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="input file in either FASTQ or FASTA format")
-	sanitizer_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="output prefix string")
-	sanitizer_parser.add_argument("-nchunks", metavar="NUM", dest="num_chunk", type=int, required=True, help="number of chunks FASTA file to split. This also specifies the number of BLAST jobs running simultaneously. nchunks * nthreads = total number of processors to be requested")
-	blast_group = sanitizer_parser.add_argument_group(description="Arugments for running BLAST")
+	# Arguments for sharpeye
+	sharpeye_parser = sub_parsers.add_parser("sharpeye", help="sharply spot dirts in your data")
+	sharpeye_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="input file in either FASTQ or FASTA format")
+	sharpeye_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="output prefix string")
+	sharpeye_parser.add_argument("-nchunks", metavar="NUM", dest="num_chunk", type=int, required=True, help="number of chunks FASTA file to split. This also specifies the number of BLAST jobs running simultaneously. nchunks * nthreads = total number of processors to be requested")
+	blast_group = sharpeye_parser.add_argument_group(description="Arugments for running BLAST")
 	blast_group.add_argument("-db", metavar="FILE", dest="db", required=True, help="database for running BLAST")
 	blast_group.add_argument("-nthreads", metavar="NUM", dest="nthreads", type=int, default=1, help="number of threads for running BLAST")
-	blast_group.add_argument("-evalue", metavar="FLOAT", dest="evalue", type=float, default=10.0, help="E-value threshold for running BLAST")
+	blast_group.add_argument("-evalue", metavar="NUM", dest="evalue", default=10, help="E-value threshold for running BLAST. 1e-2 is supported")
+	blast_group.add_argument("-ofmt", metavar="NUM", dest="outfmt", default=6, type=int, help="specify an integer for BLAST -outfmt option [6]")
 
 	fixp_parser = sub_parsers.add_parser("order", help="fixing reads order")
 
@@ -55,10 +57,10 @@ def handle_cmd():
 def main():
 	args = handle_cmd()
 
-	if args.command == "sanitizer":
+	if args.command == "sharpeye":
 		sys.path.insert(0, os.getcwd())
-		from fq_sanitizer import Sanitizer
-		Sanitizer(args).start()
+		from sharpeye import SharpEye
+		SharpEye(args).start()
 
 if __name__ == "__main__":
 	main()
