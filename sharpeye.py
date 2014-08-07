@@ -6,6 +6,11 @@ import subprocess
 import shlex
 import tempfile
 
+from fq2fa import FqSeq2Fa
+from filesmasher import FqSmasher
+from filesmasher import FaSmasher
+from ftsensor import FtSensor
+
 class SharpEye:
 	def __init__(self, args):
 		self.infile = os.path.realpath(args.infile)
@@ -14,16 +19,16 @@ class SharpEye:
 		self.db = os.path.realpath(args.db)
 		self.nthreads = args.nthreads
 		self.evalue = args.evalue
-		self.__print_cmd()
-		sys.exit()
+		self.outfmt = args.outfmt
+		self.print_cmd()
 
-	def __print_cmd(self):
+	def print_cmd(self):
 		sys.stdout.write("[CMD PARSER] infile: %s\n" %(os.path.realpath(self.infile)))
 		sys.stdout.write("[CMD PARSER] output prefix: %s\n" %(os.path.realpath(self.outp)))
 		sys.stdout.write("[CMD PARSER] num chunks: %d\n" %(self.num_chunk))
 		sys.stdout.write("[CMD PARSER] BLAST database: %s\n" %(os.path.realpath(self.db)))
 		sys.stdout.write("[CMD PARSER] num threads: %d\n" %(self.nthreads))
-		sys.stdout.write("[CMD PARSER] minimum E-Value: %f\n" %(self.evalue))
+		sys.stdout.write("[CMD PARSER] minimum E-Value: %s\n" %(self.evalue))
 		sys.stdout.write("\n")
 		return
 
@@ -39,14 +44,15 @@ class SharpEye:
 					else:
 						seq = fIN.read()
 				out_blast = self.outp + ".%d.blast" %(chunk_num)
-				blast_cmd = "blastn -db %s -outfmt 6 -out %s -num_threads %d -evalue %d " %(self.db, out_blast, self.nthreads, self.evalue)
+				blast_cmd = "blastn -db %s -outfmt %d -out %s -num_threads %d -evalue %d " %(self.db, self.outfmt, out_blast, self.nthreads, self.evalue)
 				if fmt == "fa":
 					sys.stdout.write(multiprocessing.current_process().name + "\t" + blast_cmd + "\n")
 					p = subprocess.Popen(shlex.split(blast_cmd), stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 					bout, berr = p.communicate(seq)
 				elif fmt == "fq":
 					fa_file = tempfile.mkstemp(suffix=".fasta", dir=os.path.dirname(self.outp), prefix=os.path.basename(self.outp))[1]
-					self.fq2fa(seq, fa_file)
+					num_seq = FqSeq2Fa(seq, fa_file).start()
+					sys.stdout.write("%s\tFastq to Fasta conversion ... %d\t[Done]\n" %(multiprocessing.current_process().name, num_seq))
 					sys.stdout.write(multiprocessing.current_process().name + "\t" + blast_cmd + "\n")
 					p = subprocess.Popen(shlex.split(blast_cmd), stdin = open(fa_file, 'r'), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 					bout, berr = p.communicate()
@@ -66,76 +72,10 @@ class SharpEye:
 			finally:
 				task_q.task_done()
 
-	def file_smasher(self, infile_size, fmt, task_q):
-		''' split FASTA into chunks/blocks '''
-		delim = ""
-		if fmt == "fa":
-			delim = '>'
-		elif fmt == "fq":
-			cmd = "head -n 1 %s" %(self.infile)
-			p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE)
-			delim = p.communicate()[0].split(':')[0]
-		chunk_size = infile_size/self.num_chunk
-		chunk_num = 0
-		sys.stdout.write("chunk size: %d Bytes\n" %(chunk_size))
-		fIN = open(self.infile, 'r')
-		while True:
-			start = fIN.tell()
-			fIN.seek(chunk_size, 1)
-			line = fIN.readline()
-			if not line:
-				break
-			while not line.startswith(delim):
-				line = fIN.readline()
-			else:
-				fIN.seek(-len(line), 1)
-				chunk_num += 1
-				task_q.put((start, fIN.tell()-start, chunk_num))
-		task_q.put((start, None, chunk_num+1))
-		fIN.close()
-		return
-
-	def fq2fa(self, fq_seq, fa_file):
-		''' convert FastQ to Fasta '''
-		i = 0
-		fFA = open(fa_file, 'w')
-		num_seq = 0
-		for line in fq_seq.splitlines():
-			if i % 4 == 0:
-				fFA.write(">" + line[1:] + "\n")
-				i += 1
-			elif i % 4 == 1:
-				fFA.write(line + "\n")
-				i += 1
-			elif i % 4 == 2:
-				i += 1
-			else:
-				num_seq += 1
-				i = 0
-		sys.stdout.write("%s\tFastq to Fasta conversion ... %d\t[Done]\n" %(multiprocessing.current_process().name, num_seq))
-		fFA.close()
-		return
-
-	def detect_format(self):
-		''' detect format of input file '''
-		cmd = "head -n 4 %s" %(self.infile)
-		p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE)
-		pout = p.communicate()[0]
-		for i, line in enumerate(pout.splitlines()):
-			if i == 0:
-				if line.startswith('>'):
-					return "fa"
-				elif line.startswith('@'):
-					continue
-			elif i == 2:
-				if line.startswith('+'):
-					return "fq"
-		return None
-
 	def start(self):
-		self.__run()
+		self._run()
 
-	def __run(self):
+	def _run(self):
 		''' start the whole process '''
 		if not os.path.exists(self.infile):
 			sys.stderr.write("[%s] Error: Cannot find the input file %s\n" %(os.path.basename(__file__), self.infile))
@@ -145,17 +85,10 @@ class SharpEye:
 		if not os.path.exists(outdir):
 			os.makedirs(outdir)
 
-		# detect format of input file
-		fmt = self.detect_format()
+		# smell format of input file
+		fmt, _, encoding = FtSensor(self.infile).bloodhound()
 		if fmt == None:
 			sys.stderr.write("[%s] Error: Cannot decide format of the input file\n" %(os.path.basename(__file__)))
-			sys.exit(1)
-
-		try:
-			infile_size = os.path.getsize(self.infile)
-			sys.stdout.write("total fasta file: %d Bytes\n" %(infile_size))
-		except os.error as e:
-			sys.stderr.write("%s\n" %(e))
 			sys.exit(1)
 
 		task_q = multiprocessing.JoinableQueue()
@@ -167,7 +100,11 @@ class SharpEye:
 			process.daemon = True
 			process.start()
 			chunk_processes.append(process)
-		self.file_smasher(infile_size, fmt, task_q)
+		if fmt == "fq":
+			FqSmasher(self.infile, self.num_chunk, task_q).start()
+			
+		elif fmt == "fa":
+			FaSmasher(self.infile, self.num_chunk, task_q).start()
 
 		try:
 			task_q.join()
