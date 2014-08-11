@@ -71,13 +71,13 @@ def fq2fa(args):
 		sys.stderr.write("[CMD PARSER] number of processes must be larger than 0\n")
 		sys.exit(1)
 	elif args.nproc == 1:
-		from fq2fa import Fq2Fa
+		from fx2fy import Fq2Fa
 		i = 0
 		while i < len(args.files)-1:
 			Fq2Fa(args.files[i], args.files[i+1]).start()
 			i += 2
 	else:
-		from fq2fa import Fqs2Fas
+		from fx2fy import Fqs2Fas
 		Fqs2Fas(args.files, args.nproc).start()
 
 def sharpeye(args):
