@@ -6,7 +6,9 @@ import subprocess
 import shlex
 import tempfile
 
-from fq2fa import FqSeq2Fa
+from io_simo import check_file_if_exists
+from io_simo import make_dir_if_necessary
+from seq2file import FqSeq2Fa
 from filesmasher import FqSmasher
 from filesmasher import FaSmasher
 from ftsensor import FtSensor
@@ -15,6 +17,8 @@ class SharpEye:
 	def __init__(self, args):
 		self.infile = os.path.realpath(args.infile)
 		self.outp = os.path.realpath(args.outp)
+		check_file_if_exists(self.infile)
+		make_dir_if_necessary(os.path.dirname(self.outp))
 		self.num_chunk = args.num_chunk
 		self.db = os.path.realpath(args.db)
 		self.nthreads = args.nthreads
@@ -32,7 +36,7 @@ class SharpEye:
 		sys.stdout.write("\n")
 		return
 
-	def dirtspotter(self, task_q, blast_q, err_q, fmt):
+	def _dirtspotter(self, task_q, blast_q, err_q, fmt):
 		while True:
 			try:
 				chunk_start, chunk_end, chunk_num = task_q.get()
@@ -77,14 +81,6 @@ class SharpEye:
 
 	def _run(self):
 		''' start the whole process '''
-		if not os.path.exists(self.infile):
-			sys.stderr.write("[%s] Error: Cannot find the input file %s\n" %(os.path.basename(__file__), self.infile))
-			sys.exit(1)
-
-		outdir = os.path.dirname(self.outp)
-		if not os.path.exists(outdir):
-			os.makedirs(outdir)
-
 		# smell format of input file
 		fmt, _, encoding = FtSensor(self.infile).bloodhound()
 		if fmt == None:
@@ -96,15 +92,14 @@ class SharpEye:
 		err_q = multiprocessing.Queue()
 		chunk_processes = []
 		for i in range(self.num_chunk):
-			process = multiprocessing.Process(target=self.dirtspotter, args=(task_q, blast_q, err_q, fmt))
+			process = multiprocessing.Process(target=self._dirtspotter, args=(task_q, blast_q, err_q, fmt))
 			process.daemon = True
 			process.start()
 			chunk_processes.append(process)
 		if fmt == "fq":
-			FqSmasher(self.infile, self.num_chunk, task_q).start()
-			
+			FqSmasher(self.infile, self.num_chunk, self.outp, task_q).getchunk()
 		elif fmt == "fa":
-			FaSmasher(self.infile, self.num_chunk, task_q).start()
+			FaSmasher(self.infile, self.num_chunk, self.outp, task_q).getchunk()
 
 		try:
 			task_q.join()
