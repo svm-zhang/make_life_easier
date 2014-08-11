@@ -2,18 +2,46 @@ import sys
 import subprocess
 import shlex
 import os
+import multiprocessing
+
+from io_simo import check_file_if_exists
+from io_simo import make_dir_if_necessary
+from ftsensor import FtSensor
 
 class FileSmasher(object):
-	def __init__(self, infile, num_chunk, task_q):
-		self.infile = infile
+	def __init__(self, infile, num_chunk, nproc, outp, task_q):
+		self.infile = os.path.realpath(infile)
 		self.num_chunk = num_chunk
+		self.nproc = nproc
+		self.outp = os.path.realpath(outp)
 		self.task_q = task_q
+		self._check()
+
+	def _check(self):
+		check_file_if_exists(self.infile)
+		if self.num_chunk < 1:
+			sys.stderr.write("[SMASHER PARSER Error] number of chunks must be larger than zero\n")
+			sys.exit(1)
+		elif self.num_chunk == 1:
+			sys.stderr.write("[SMASHER PARSER Warning] only one chunk will be split to input file\n")
+		if self.nproc < 1:
+			sys.stderr.write("[SMASHER PARSER Error] number of processors must be larger than zero\n")
+			sys.exit(1)
+		make_dir_if_necessary(os.path.dirname(self.outp))
 
 	def show(self):
 		sys.stdout.write("input: %s\n" %(self.infile))
 		sys.stdout.write("%d Bytes file smashes into %d chunks\n" %(self._get_fsize(), self.num_chunk))
+		sys.stdout.write("ouput prefix: %s\n" %(self.outp))
+
+	def _init_processes(self, out_suffix):
+		for _ in range(self.nproc):
+			p = multiprocessing.Process(target=self._smash, args=(out_suffix, ))
+			p.daemon = True
+			p.start()
 
 	def _get_fsize(self):
+		''' get input file size '''
 		try:
 			fsize = os.path.getsize(self.infile)
 		except os.error as e:
@@ -25,12 +53,41 @@ class FileSmasher(object):
 	def get_chunk_size(self):
 		return self._get_fsize()/self.num_chunk
 
+	def _smash(self, out_suffix):
+		while True:
+			try:
+				chunk_start, chunk_end, chunk_num = self.task_q.get()
+				sys.stdout.write("%s\t%s\t%s\t%s\t%d\n" %(multiprocessing.current_process().name, chunk_start, chunk_end, self.infile, chunk_num))
+				with open(self.infile, 'r') as fIN:
+					fIN.seek(chunk_start)
+					if chunk_end:
+						seq = fIN.read(chunk_end)
+					else:
+						seq = fIN.read()
+				outfile = self.outp + ".%d.%s" %(chunk_num, out_suffix)
+				sys.stdout.write("%s\t%s\n" %(multiprocessing.current_process().name, outfile))
+				fOUT = open(outfile, 'w')
+				fOUT.write(seq)
+				fOUT.flush()
+				fOUT.close()
+			finally:
+				self.task_q.task_done()
+
 class FqSmasher(FileSmasher):
-	def __init__(self, infile, num_chunk, task_q):
-		super(FqSmasher, self).__init__(infile, num_chunk, task_q)
+	def __init__(self, infile, num_chunk, nproc, outp, task_q):
+		super(FqSmasher, self).__init__(infile, num_chunk, nproc, outp, task_q)
+		if FtSensor(self.infile).getfiletype() != "fq":
+			sys.stderr.write("[SMASHER Error] %s has wrong format\n" %(self.infile))
+			sys.exit(1)
 		self.delim = self._get_delim()
+		self.out_suffix = "fastq"
+
+	def show(self):
+		super(FqSmasher, self).show()
+		sys.stdout.write("delim: %s\n" %(self.delim, ))
 
 	def _get_delim(self):
+		''' get split boundary symbol '''
 		cmd = "head -n 1 %s" %(self.infile)
 		p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE)
 		header = p.communicate()[0]
@@ -40,17 +97,8 @@ class FqSmasher(FileSmasher):
 			delim = ("/1", "/2")
 		return delim
 
-	def show(self):
-		super(FqSmasher, self).show()
-		sys.stdout.write("delim: %s\n" %(self.delim, ))
-
-	def start(self):
-		self._fqsmasher()
-		return
-
-	def _fqsmasher(self):
-		''' split FASTQ into chunks/blocks '''
-		self.show()
+	def getchunk(self):
+		''' get chunk boundaries '''
 		fIN = open(self.infile, 'r')
 		chunk_size = super(FqSmasher, self).get_chunk_size()
 		chunk_num = 0
@@ -68,24 +116,29 @@ class FqSmasher(FileSmasher):
 				self.task_q.put((start, fIN.tell()-start, chunk_num))
 		self.task_q.put((start, None, chunk_num+1))
 		fIN.close()
-		return
+
+	def start(self):
+		self.show()
+		super(FqSmasher, self)._init_processes(self.out_suffix)
+		self.getchunk()
+		try:
+			self.task_q.join()
+		except KeyboardInterrupt:
+			sys.stderr.write("Terminated unexpectedly by keyboard\n")
+			sys.exit()
 
 class FaSmasher(FileSmasher):
-	def __init__(self, infile, num_chunk, task_q):
-		super(FaSmasher, self).__init__(infile, num_chunk, task_q)
+	def __init__(self, infile, num_chunk, nproc, outp, task_q):
+		super(FaSmasher, self).__init__(infile, num_chunk, nproc, outp, task_q)
 		self.delim = ">"
-		self.show()
+		self.out_suffix = "fasta"
 
 	def show(self):
 		super(FaSmasher, self).show()
 		sys.stdout.write("delim: %s\n" %(self.delim, ))
 
-	def start(self):
-		self._fasmasher()
-		return
-
-	def _fasmasher(self):
-		''' split FASTQ into chunks/blocks '''
+	def getchunk(self):
+		''' get chunk boundaries '''
 		self.show()
 		fIN = open(self.infile, 'r')
 		chunk_size = super(FaSmasher, self).get_chunk_size()
@@ -106,9 +159,12 @@ class FaSmasher(FileSmasher):
 		fIN.close()
 		return
 
-#fq = sys.argv[1]
-#fa = sys.argv[2]
-#
-#task_q = multiprocessing.JoinableQueue()
-#FqSmasher(fq, 4, task_q).start()
-#FaSmasher(fa, 4, task_q).start()
+	def start(self):
+		self.show()
+		super(FaSmasher, self)._init_processes(self.out_suffix)
+		self.getchunk()
+		try:
+			self.task_q.join()
+		except KeyboardInterrupt:
+			sys.stderr.write("Terminated unexpectedly by keyboard\n")
+			sys.exit()
