@@ -7,7 +7,7 @@ class FtSensor(object):
 	def __init__(self, infile):
 		self.infile = infile
 
-	def _getfiletype(self):
+	def getfiletype(self):
 		''' detect format of input file '''
 		for i, line in enumerate(self._getlines(4).splitlines()):
 			if i == 0:
@@ -27,7 +27,7 @@ class FtSensor(object):
 		pout = p.communicate()[0]
 		return pout
 
-	def _getencoding(self):
+	def getencoding(self):
 		''' sense the header format and quality encodings '''
 		ft, hfmt, encoding = None, None, None
 		quals = []
@@ -68,13 +68,9 @@ class FtSensor(object):
 			begin sensing process
 			sensing like a bloodhound
 		'''
-		ft = self._getfiletype()
+		ft = self.getfiletype()
 		if ft == "fa":
 			return ft, None, None
 		elif ft == "fq":
-			hfmt, encoding = self._getencoding()
+			hfmt, encoding = self.getencoding()
 			return ft, hfmt, encoding
-
-#fq = sys.argv[1]
-#
-#print FtSensor(fq).bloodhound()
