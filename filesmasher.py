@@ -9,10 +9,9 @@ from io_simo import make_dir_if_necessary
 from ftsensor import FtSensor
 
 class FileSmasher(object):
-	def __init__(self, infile, num_chunk, nproc, outp, task_q):
+	def __init__(self, infile, num_chunk, outp, task_q):
 		self.infile = os.path.realpath(infile)
 		self.num_chunk = num_chunk
-		self.nproc = nproc
 		self.outp = os.path.realpath(outp)
 		self.task_q = task_q
 		self._check()
@@ -24,9 +23,6 @@ class FileSmasher(object):
 			sys.exit(1)
 		elif self.num_chunk == 1:
 			sys.stderr.write("[SMASHER PARSER Warning] only one chunk will be split to input file\n")
-		if self.nproc < 1:
-			sys.stderr.write("[SMASHER PARSER Error] number of processors must be larger than zero\n")
-			sys.exit(1)
 		make_dir_if_necessary(os.path.dirname(self.outp))
 
 	def show(self):
@@ -34,8 +30,8 @@ class FileSmasher(object):
 		sys.stdout.write("%d Bytes file smashes into %d chunks\n" %(self._get_fsize(), self.num_chunk))
 		sys.stdout.write("ouput prefix: %s\n" %(self.outp))
 
-	def _init_processes(self, out_suffix):
-		for _ in range(self.nproc):
+	def _init_processes(self, nproc, out_suffix):
+		for _ in range(nproc):
 			p = multiprocessing.Process(target=self._smash, args=(out_suffix, ))
 			p.daemon = True
 			p.start()
@@ -74,8 +70,8 @@ class FileSmasher(object):
 				self.task_q.task_done()
 
 class FqSmasher(FileSmasher):
-	def __init__(self, infile, num_chunk, nproc, outp, task_q):
-		super(FqSmasher, self).__init__(infile, num_chunk, nproc, outp, task_q)
+	def __init__(self, infile, num_chunk, outp, task_q):
+		super(FqSmasher, self).__init__(infile, num_chunk, outp, task_q)
 		if FtSensor(self.infile).getfiletype() != "fq":
 			sys.stderr.write("[SMASHER Error] %s has wrong format\n" %(self.infile))
 			sys.exit(1)
@@ -117,9 +113,12 @@ class FqSmasher(FileSmasher):
 		self.task_q.put((start, None, chunk_num+1))
 		fIN.close()
 
-	def start(self):
+	def start(self, nproc):
 		self.show()
-		super(FqSmasher, self)._init_processes(self.out_suffix)
+		if nproc < 1:
+			sys.stderr.write("[SMASHER PARSER Error] number of processors must be larger than zero\n")
+			sys.exit(1)
+		super(FqSmasher, self)._init_processes(nproc, self.out_suffix)
 		self.getchunk()
 		try:
 			self.task_q.join()
@@ -128,8 +127,8 @@ class FqSmasher(FileSmasher):
 			sys.exit()
 
 class FaSmasher(FileSmasher):
-	def __init__(self, infile, num_chunk, nproc, outp, task_q):
-		super(FaSmasher, self).__init__(infile, num_chunk, nproc, outp, task_q)
+	def __init__(self, infile, num_chunk, outp, task_q):
+		super(FaSmasher, self).__init__(infile, num_chunk, outp, task_q)
 		self.delim = ">"
 		self.out_suffix = "fasta"
 
@@ -159,9 +158,9 @@ class FaSmasher(FileSmasher):
 		fIN.close()
 		return
 
-	def start(self):
+	def start(self, nproc):
 		self.show()
-		super(FaSmasher, self)._init_processes(self.out_suffix)
+		super(FaSmasher, self)._init_processes(nproc, self.out_suffix)
 		self.getchunk()
 		try:
 			self.task_q.join()
