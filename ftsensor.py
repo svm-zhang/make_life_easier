@@ -36,16 +36,16 @@ class FtSensor(object):
 				if hfmt == "mix":
 					continue
 				if len(line.strip().split(' ')) == 2:
-					if hfmt == "":
-						hfmt = "illumina14"
-					else:
-						if hfmt != "illumina14":
-							hfmt = "mix"		# different header fmt detected
-				elif len(line.strip().split('/')) == 2:
-					if hfmt == "":
+					if hfmt == None:
 						hfmt = "casava18"
 					else:
 						if hfmt != "casava18":
+							hfmt = "mix"		# different header fmt detected
+				elif len(line.strip().split('/')) == 2:
+					if hfmt == None:
+						hfmt = "illumina14"
+					else:
+						if hfmt != "illumina14":
 							hfmt = "mix"		# different header fmt detected
 			elif i % 4 == 3:
 				for qual in line.strip():
