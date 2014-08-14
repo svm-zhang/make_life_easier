@@ -3,6 +3,7 @@ import subprocess
 import shlex
 import os
 import multiprocessing
+import re
 
 from io_simo import check_file_if_exists
 from io_simo import make_dir_if_necessary
@@ -87,8 +88,9 @@ class FqSmasher(FileSmasher):
 		cmd = "head -n 1 %s" %(self.infile)
 		p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE)
 		header = p.communicate()[0]
+		delim = ""
 		if len(header.split(' ')) == 2:		#@... 1:N:0:...\n
-			delim = header.strip().split(' ')[1]
+			delim = "[1|2]:N:0:"
 		elif len(header.split('/')) == 2:		#@...#.../1[2]\n
 			delim = ("/1", "/2")
 		return delim
@@ -101,11 +103,11 @@ class FqSmasher(FileSmasher):
 		while True:
 			start = fIN.tell()
 			fIN.seek(chunk_size, 1)
-			line = fIN.readline().strip()
+			line = fIN.readline()
 			if not line:
 				break
-			while not line.endswith(self.delim):
-				line = fIN.readline().strip()
+			while not re.search(self.delim, line.strip()):
+				line = fIN.readline()
 			else:
 				fIN.seek(-len(line), 1)
 				chunk_num += 1
