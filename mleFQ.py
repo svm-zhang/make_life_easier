@@ -32,17 +32,26 @@ def handle_cmd():
 	main_parser = argparse.ArgumentParser(description="FastQ main portal", formatter_class=SubcommandHelpFormatter)
 	sub_parsers = main_parser.add_subparsers(title="Commands", metavar="[command]", dest="command")
 
-	# Arguments for sharpeye
-	sharpeye_parser = sub_parsers.add_parser("sharpeye", help="sharply spot dirts in your data")
-	sharpeye_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="input file in either FASTQ or FASTA format")
-	sharpeye_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="output prefix string")
-	sharpeye_parser.add_argument("-nchunks", metavar="NUM", dest="num_chunk", type=int, required=True, help="number of chunks FASTA file to split. This also specifies the number of BLAST jobs running simultaneously. nchunks * nthreads = total number of processors to be requested")
-	blast_group = sharpeye_parser.add_argument_group(description="Arugments for running BLAST")
+	# Arguments for blast
+	runblast_parser = sub_parsers.add_parser("blast", help="sharply spot dirts in your data")
+	runblast_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="input file in either FASTQ or FASTA format")
+	runblast_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="output prefix string")
+	runblast_parser.add_argument("-nchunks", metavar="NUM", dest="num_chunk", type=int, required=True, help="number of chunks FASTA file to split. This also specifies the number of BLAST jobs running simultaneously. nchunks * nthreads = total number of processors to be requested")
+	blast_group = runblast_parser.add_argument_group(description="Arugments for running BLAST")
 	blast_group.add_argument("-db", metavar="FILE", dest="db", required=True, help="database for running BLAST")
 	blast_group.add_argument("-nthreads", metavar="NUM", dest="nthreads", type=int, default=1, help="number of threads for running BLAST")
 	blast_group.add_argument("-evalue", metavar="NUM", dest="evalue", default=10, help="E-value threshold for running BLAST. 1e-2 is supported")
 	blast_group.add_argument("-ofmt", metavar="NUM", dest="outfmt", default=6, type=int, help="specify an integer for BLAST -outfmt option [6]")
-	sharpeye_parser.set_defaults(func=sharpeye)
+	runblast_parser.set_defaults(func=runblast)
+
+	# Arguments for clean
+	clean_parser = sub_parsers.add_parser("clean", help="remove reads with BLAST hits obtained from mleFQ.py blast command")
+	clean_parser.add_argument("-fq1", metavar="FILE", dest="fq1", required=True, help="FastQ file of first-end to be cleaned")
+	clean_parser.add_argument("-fq2", metavar="FILE", dest="fq2", required=True, help="FastQ file of second-end to be cleaned")
+	clean_parser.add_argument("-b1", metavar="FILE", dest="b1", required=True, help="BLAST result in m6 format for fq1")
+	clean_parser.add_argument("-b2", metavar="FILE", dest="b2", required=True, help="BLAST result in m6 format for fq2")
+	clean_parser.add_argument("-o1", metavar="FILE", dest="o1", required=True, help="output FastQ file for the first-end")
+	clean_parser.add_argument("-o2", metavar="FILE", dest="o2", required=True, help="output FastQ file for the second-end")
 
 	# Arguments for fq2fa
 	fq2fa_parser = sub_parsers.add_parser("fq2fa", help="convert given FastQ to Fasta")
@@ -50,6 +59,7 @@ def handle_cmd():
 	fq2fa_parser.add_argument("-nproc", metavar="INT", dest="nproc", type=int, default=1, help="specify number of conversion jobs running simultaneously [1]")
 	fq2fa_parser.set_defaults(func=fq2fa)
 
+	# Arguments for smash
 	smash_parser = sub_parsers.add_parser("smash", help="smash file into pieces")
 	smash_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="specify FastQ file to be split")
 	smash_parser.add_argument("-nchunks", metavar="INT", dest="num_chunk", type=int, default=2, help="specify number of chunks/blocks to split [2]")
@@ -57,8 +67,10 @@ def handle_cmd():
 	smash_parser.add_argument("-p", metavar="PREFIX", dest="outp", help="output prefix")
 	smash_parser.set_defaults(func=smash)
 
+	# Arguments for order
 	fixp_parser = sub_parsers.add_parser("order", help="fixing reads order")
-
+	fixp_parser.add_argument("-save", dest="mem_save", action="store_true", help="specify whether use memory saving mode. Warning: this runs very slow")
+	fixp_parser.set_defaults(func=fixpairing)
 
 	fastqc_parser = sub_parsers.add_parser("fastqc", help="run FastQC on give file(s)")
 
@@ -80,7 +92,7 @@ def fq2fa(args):
 		from fx2fy import Fqs2Fas
 		Fqs2Fas(args.files, args.nproc).start()
 
-def sharpeye(args):
+def runblast(args):
 	from sharpeye import SharpEye
 	SharpEye(args).start()
 
@@ -91,7 +103,7 @@ def smash(args):
 	from filesmasher import FqSmasher
 	import multiprocessing
 	task_q = multiprocessing.JoinableQueue()
-	FqSmasher(args.infile, args.num_chunk, args.nproc, args.outp, task_q).start()
+	FqSmasher(args.infile, args.num_chunk, args.outp, task_q).start(args.nproc)
 
 def interleave(args):
 	pass
