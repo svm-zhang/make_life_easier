@@ -1,8 +1,7 @@
-
 import argparse
 import os
 import sys
-
+import multiprocessing
 
 class SubcommandHelpFormatter(argparse.RawDescriptionHelpFormatter):
 	def _format_action(self, action):
@@ -46,12 +45,9 @@ def handle_cmd():
 
 	# Arguments for clean
 	clean_parser = sub_parsers.add_parser("clean", help="remove reads with BLAST hits obtained from mleFQ.py blast command")
-	clean_parser.add_argument("-fq1", metavar="FILE", dest="fq1", required=True, help="FastQ file of first-end to be cleaned")
-	clean_parser.add_argument("-fq2", metavar="FILE", dest="fq2", required=True, help="FastQ file of second-end to be cleaned")
-	clean_parser.add_argument("-b1", metavar="FILE", dest="b1", required=True, help="BLAST result in m6 format for fq1")
-	clean_parser.add_argument("-b2", metavar="FILE", dest="b2", required=True, help="BLAST result in m6 format for fq2")
-	clean_parser.add_argument("-o1", metavar="FILE", dest="o1", required=True, help="output FastQ file for the first-end")
-	clean_parser.add_argument("-o2", metavar="FILE", dest="o2", required=True, help="output FastQ file for the second-end")
+	clean_parser.add_argument("-in", metavar="FQ,BLAST", dest="inputs", action="append", help="input files. Can be specified multiple times. Example -in a1.fq,a1.blast -in a2.fq,a2.blast")
+	clean_parser.add_argument("-nproc", metavar="INT", dest="nproc", type=int, default=1, help="Specify the number cleaning jobs running simultaneously")
+	clean_parser.set_defaults(func=clean)
 
 	# Arguments for fq2fa
 	fq2fa_parser = sub_parsers.add_parser("fq2fa", help="convert given FastQ to Fasta")
@@ -93,15 +89,19 @@ def fq2fa(args):
 		Fqs2Fas(args.files, args.nproc).start()
 
 def runblast(args):
-	from sharpeye import SharpEye
-	SharpEye(args).start()
+	from blast import Blast
+	Blast(args).start()
+
+def clean(args):
+	from clean import Clean
+	task_q = multiprocessing.JoinableQueue()
+	Clean(args.inputs, args.nproc, task_q).start()
 
 def fixpairing(args):
 	pass
 
 def smash(args):
 	from filesmasher import FqSmasher
-	import multiprocessing
 	task_q = multiprocessing.JoinableQueue()
 	FqSmasher(args.infile, args.num_chunk, args.outp, task_q).start(args.nproc)
 
