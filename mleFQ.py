@@ -64,7 +64,10 @@ def handle_cmd():
 	smash_parser.set_defaults(func=smash)
 
 	# Arguments for order
-	fixp_parser = sub_parsers.add_parser("order", help="fixing reads order")
+	fixp_parser = sub_parsers.add_parser("fixpe", help="fixing reads order")
+	fixp_parser.add_argument("-fq1", metavar="FILE", dest="fq1", required=True, help="specify FastQ file of the first-end of a read pair")
+	fixp_parser.add_argument("-fq2", metavar="FILE", dest="fq2", required=True, help="specify FastQ file of the second-end of a read pair")
+	fixp_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="specify prefix for output file. PREFIX_r1.fastq, PREFIX_r2.fastq, and PREFIX_orphan.fastq will be output")
 	fixp_parser.add_argument("-save", dest="mem_save", action="store_true", help="specify whether use memory saving mode. Warning: this runs very slow")
 	fixp_parser.set_defaults(func=fixpairing)
 
@@ -98,7 +101,12 @@ def clean(args):
 	Clean(args.inputs, args.nproc, task_q).start()
 
 def fixpairing(args):
-	pass
+	if not args.mem_save:
+		from fixpe import FixPE
+		FixPE(args).start()
+	else:
+		from fixpe import FixPE_Save
+		FixPE_Save(args)
 
 def smash(args):
 	from filesmasher import FqSmasher
