@@ -20,6 +20,10 @@ class FtSensor(object):
 					return "fq"
 		return None
 
+	def _get_total_lines(self):
+		''' get total number of lines in a file'''
+
+
 	def _getlines(self, num_line):
 		''' get given number of lines in a file '''
 		cmd = "head -n %d %s" %(num_line, self.infile)
@@ -27,14 +31,13 @@ class FtSensor(object):
 		pout = p.communicate()[0]
 		return pout
 
-	def getencoding(self):
-		''' sense the header format and quality encodings '''
-		ft, hfmt, encoding = None, None, None
-		quals = []
+	def gethfmt(self):
+		''' get the header line format '''
+		hfmt = None
 		for i, line in enumerate(self._getlines(100000).splitlines()):
 			if i % 4 == 0:
 				if hfmt == "mix":
-					continue
+					break
 				if len(line.strip().split(' ')) == 2:
 					if hfmt == None:
 						hfmt = "casava18"
@@ -47,7 +50,14 @@ class FtSensor(object):
 					else:
 						if hfmt != "illumina14":
 							hfmt = "mix"		# different header fmt detected
-			elif i % 4 == 3:
+		return hfmt
+
+	def getencoding(self):
+		''' sense the header format and quality encodings '''
+		encoding = None
+		quals = []
+		for i, line in enumerate(self._getlines(100000).splitlines()):
+			if i % 4 == 3:
 				for qual in line.strip():
 					quals.append(ord(qual))
 
