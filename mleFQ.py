@@ -106,7 +106,7 @@ def fixpairing(args):
 		FixPE(args).start()
 	else:
 		from fixpe import FixPE_Save
-		FixPE_Save(args)
+		FixPE_Save(args).start()
 
 def smash(args):
 	from filesmasher import FqSmasher
