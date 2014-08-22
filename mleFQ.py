@@ -71,7 +71,19 @@ def handle_cmd():
 	fixp_parser.add_argument("-save", dest="mem_save", action="store_true", help="specify whether use memory saving mode. Warning: this runs very slow")
 	fixp_parser.set_defaults(func=fixpairing)
 
+	# Arguments for fastqc
 	fastqc_parser = sub_parsers.add_parser("fastqc", help="run FastQC on give file(s)")
+	fastqc_parser.add_argument("-target", metavar="DIR", dest="target", required=True, help="target directory where results will be put")
+	fastqc_parser.add_argument("-nproc", metavar="INT", type=int, dest="nproc", default=1, help="number of FastQC jobs to run simultaneously. nproc*nthreads = tot_num_cores_to_request [1]")
+	fastqc_group = fastqc_parser.add_argument_group(description="Arguments for running FastQC")
+	fastqc_group.add_argument("-nthreads", metavar="INT", type=int, dest="nthreads", default=1, help="number of threads for each fastqc process [1]")
+	fastqc_group.add_argument("-noextract", dest="noextract", action="store_true", help="specify to ask FastQC not to uncompress the output files [false/uncompress]")
+	fastqc_group.add_argument("-kmer", metavar="INT", type=int, dest="kmer", default=5, choices=range(2,11), help="specify the length of Kmer to look for in FastQC [5]")
+	fastqc_group.add_argument("-fastqc", metavar="FILE", dest="fastqc_prg", default="fastqc", help="specify a path to where FastQC is installed. If not specified, \"fastqc\" will be used [fastqc]")
+	mutual_group = fastqc_parser.add_mutually_exclusive_group(required=True)
+	mutual_group.add_argument("-source", metavar="DIR", dest="source", help="source directory where to-be-processed-fastq files are stored. Cannot use with -list at the same time")
+	mutual_group.add_argument("-list", metavar="FILE", dest="source", help="a file with a list of fastq files to be processed")
+	fastqc_parser.set_defaults(func=runfastqc)
 
 	interleave_parser = sub_parsers.add_parser("mergeFQ", help="create interleaved Fastq file from pair-end data")
 
@@ -116,8 +128,9 @@ def smash(args):
 def interleave(args):
 	pass
 
-def call_fastqc(args):
-	pass
+def runfastqc(args):
+	from fastqc import FastQC
+	FastQC(args).start()
 
 def main():
 	args = handle_cmd()
