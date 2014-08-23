@@ -153,7 +153,7 @@ class FaSmasher(FileSmasher):
 			while not line.startswith(self.delim):
 				line = fIN.readline().strip()
 			else:
-				fIN.seek(-len(line), 1)
+				fIN.seek(-len(line)-1, 1)
 				chunk_num += 1
 				self.task_q.put((start, fIN.tell()-start, chunk_num))
 		self.task_q.put((start, None, chunk_num+1))
