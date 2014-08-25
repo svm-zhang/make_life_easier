@@ -92,7 +92,7 @@ class Mummer:
 						else:
 								results_q.put(out_coords)
 					else:
-						sys.stderr.write("[mleFA Nucmer] Error: no delta file found after Nucmer\n")
+						sys.stderr.write("[mleFA Nucmer] Error: no delta file %s found after Nucmer\n" %(outp_delta+".delta"))
 						err_q.put((multiprocessing.current_process().name, outp_delta+".delta", 1))
 			finally:
 				task_q.task_done()
