@@ -23,12 +23,15 @@ class FtSensor(object):
 	def _get_total_lines(self):
 		''' get total number of lines in a file'''
 
-
 	def _getlines(self, num_line):
 		''' get given number of lines in a file '''
 		cmd = "head -n %d %s" %(num_line, self.infile)
-		p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE)
-		pout = p.communicate()[0]
+		try:
+			p = subprocess.Popen(shlex.split(cmd), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			pout, perr = p.communicate()
+		except (OSError, ValueError) as e:
+			sys.stderr.write("%s\n" %(perr))
+			sys.stderr.write("%s\n" %(e))
 		return pout
 
 	def gethfmt(self):
