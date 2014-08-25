@@ -131,12 +131,13 @@ class FqSmasher(FileSmasher):
 class FaSmasher(FileSmasher):
 	def __init__(self, infile, num_chunk, outp, task_q):
 		super(FaSmasher, self).__init__(infile, num_chunk, outp, task_q)
+#		self.task_q = multiprocessing.JoinableQueue()
 		self.delim = ">"
 		self.out_suffix = "fasta"
 
 	def show(self):
 		super(FaSmasher, self).show()
-		sys.stdout.write("delim: %s\n" %(self.delim, ))
+#		sys.stdout.write("delim: %s\n" %(self.delim, ))
 
 	def getchunk(self):
 		''' get chunk boundaries '''
@@ -153,9 +154,17 @@ class FaSmasher(FileSmasher):
 			while not line.startswith(self.delim):
 				line = fIN.readline().strip()
 			else:
-				fIN.seek(-len(line)-1, 1)
+				fIN.seek(-len(line)+1, 1)
+#				print fIN.read(1)
+#				print start, fIN.tell(), fIN.tell()-start
 				chunk_num += 1
-				self.task_q.put((start, fIN.tell()-start, chunk_num))
+				if start == 0:
+					self.task_q.put((start, fIN.tell()-start-2, chunk_num))
+				else:
+					self.task_q.put((start-2, fIN.tell()-start-1, chunk_num))
+#				fIN.seek(1, 1)
+#				start = fIN.tell()+1
+#		print start, fIN.tell(), fIN.tell()-start-1
 		self.task_q.put((start, None, chunk_num+1))
 		fIN.close()
 		return
