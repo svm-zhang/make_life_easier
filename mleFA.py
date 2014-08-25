@@ -50,7 +50,7 @@ def handle_cmd():
 	smash_parser = sub_parsers.add_parser("smash", help="smash files into chunks")
 	smash_parser.add_argument("-in", metavar="FILE", dest="infile", required=True, help="specify input file in Fasta format")
 	smash_parser.add_argument("-nchunks", metavar="INT", dest="num_chunk", type=int, default=2, help="specify number of chunks the given file will be smashed [2]")
-	smash_parser.add_argument("-outp", metavar="PREFIX", dest="outp", required=True, help="specify the prefix of output file")
+	smash_parser.add_argument("-p", metavar="PREFIX", dest="outp", required=True, help="specify the prefix of output file")
 	smash_parser.add_argument("-nproc", metavar="INT", dest="nproc", type=int, default=1, help="specify number of smashing jobs running simultaneously [1]")
 	smash_parser.set_defaults(func=smash)
 
@@ -64,7 +64,6 @@ def smash(args):
 def runucmer(args):
 	from mummer import Mummer
 	Mummer(args).start()
-
 
 def main():
 	args = handle_cmd()
